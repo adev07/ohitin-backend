@@ -37,7 +37,8 @@ export const buildUserMessage = (text: string): MessageRecord => ({
 });
 
 export const shouldWaitForContact = (flow: IntentCategory, step: number) =>
-  flow !== "GENERAL" && step === PROFESSIONAL_REPLY_LIMIT;
+  false;
 
 export const shouldCompleteAfterReply = (flow: IntentCategory, step: number) =>
-  flow === "GENERAL" && step === GENERAL_REPLY_LIMIT;
+  (flow !== "GENERAL" && step === PROFESSIONAL_REPLY_LIMIT) ||
+  (flow === "GENERAL" && step === GENERAL_REPLY_LIMIT);

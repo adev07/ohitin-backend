@@ -1,6 +1,7 @@
 import {
   FLOW_MESSAGES,
   GENERAL_REPLY_LIMIT,
+  GENERAL_CONTINUATION_MESSAGES,
   PROFESSIONAL_REPLY_LIMIT,
 } from "../config/assistant";
 import { IntentCategory } from "../types";
@@ -13,6 +14,12 @@ export const getFlowReply = (
   step: number,
   branch?: "creative" | "financing" | null
 ) => {
+  if (flow === "GENERAL" && step > GENERAL_REPLY_LIMIT) {
+    return GENERAL_CONTINUATION_MESSAGES[
+      (step - GENERAL_REPLY_LIMIT - 1) % GENERAL_CONTINUATION_MESSAGES.length
+    ];
+  }
+
   if (flow === "PRODUCER") {
     if (step === 1) {
       return FLOW_MESSAGES.PRODUCER[0];

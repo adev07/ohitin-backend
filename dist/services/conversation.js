@@ -46,18 +46,6 @@ const extractContactData = (message) => {
     });
 };
 const generateAnonymousUserId = () => new mongoose_1.default.Types.ObjectId().toString();
-const getContactAcknowledgement = (contactData) => {
-    if (contactData.email && contactData.phone) {
-        return assistant_1.CONTACT_CAPTURE_MESSAGES.BOTH;
-    }
-    if (contactData.email) {
-        return assistant_1.CONTACT_CAPTURE_MESSAGES.EMAIL;
-    }
-    if (contactData.phone) {
-        return assistant_1.CONTACT_CAPTURE_MESSAGES.PHONE;
-    }
-    return assistant_1.CONTACT_CAPTURE_MESSAGES.REMINDER;
-};
 const startConversation = (_a) => __awaiter(void 0, [_a], void 0, function* ({ userId }) {
     return {
         _id: null,
@@ -118,15 +106,17 @@ const sendMessage = (_a) => __awaiter(void 0, [_a], void 0, function* ({ convers
         conversation.tags = (0, tagManager_1.addUniqueTags)(conversation.tags, ["NEW"]);
     }
     const contactData = extractContactData(trimmedMessage);
-    if (contactData.email) {
-        conversation.capturedData.email = contactData.email;
-        conversation.tags = (0, tagManager_1.addUniqueTags)(conversation.tags, ["EMAIL_RECEIVED"]);
-    }
-    if (contactData.phone) {
-        conversation.capturedData.phone = contactData.phone;
-        conversation.tags = (0, tagManager_1.addUniqueTags)(conversation.tags, ["PHONE_RECEIVED"]);
-    }
     if (conversation.status === "COMPLETED") {
+        if (conversation.currentFlow && conversation.currentFlow !== "GENERAL") {
+            if (contactData.email) {
+                conversation.capturedData.email = contactData.email;
+                conversation.tags = (0, tagManager_1.addUniqueTags)(conversation.tags, ["EMAIL_RECEIVED"]);
+            }
+            if (contactData.phone) {
+                conversation.capturedData.phone = contactData.phone;
+                conversation.tags = (0, tagManager_1.addUniqueTags)(conversation.tags, ["PHONE_RECEIVED"]);
+            }
+        }
         yield conversation.save();
         return {
             conversation,
@@ -137,18 +127,12 @@ const sendMessage = (_a) => __awaiter(void 0, [_a], void 0, function* ({ convers
     if (conversation.status === "WAITING_FOR_CONTACT" &&
         conversation.currentFlow &&
         conversation.currentFlow !== "GENERAL") {
-        const replyText = getContactAcknowledgement(contactData);
-        const assistantMessage = (0, responseGenerator_1.buildAssistantMessage)(conversation.currentFlow, replyText, conversation.messageStep + (contactData.email || contactData.phone ? 1 : 0));
-        conversation.messages.push(assistantMessage);
-        if (contactData.email || contactData.phone) {
-            conversation.messageStep += 1;
-            conversation.status = "COMPLETED";
-        }
+        conversation.status = "COMPLETED";
         yield conversation.save();
         return {
             conversation,
-            assistantMessage,
-            conversationClosed: conversation.status === "COMPLETED",
+            assistantMessage: null,
+            conversationClosed: true,
         };
     }
     if (!conversation.currentFlow) {
@@ -174,14 +158,24 @@ const sendMessage = (_a) => __awaiter(void 0, [_a], void 0, function* ({ convers
             conversation.tags = (0, tagManager_1.addUniqueTags)(conversation.tags, ["PRODUCER_FINANCING"]);
         }
     }
+    if (conversation.currentFlow !== "GENERAL") {
+        if (contactData.email) {
+            conversation.capturedData.email = contactData.email;
+            conversation.tags = (0, tagManager_1.addUniqueTags)(conversation.tags, ["EMAIL_RECEIVED"]);
+        }
+        if (contactData.phone) {
+            conversation.capturedData.phone = contactData.phone;
+            conversation.tags = (0, tagManager_1.addUniqueTags)(conversation.tags, ["PHONE_RECEIVED"]);
+        }
+    }
     const replyLimit = (0, flowEngine_1.getReplyLimitForFlow)(conversation.currentFlow);
-    if (conversation.messageStep >= replyLimit) {
+    if (conversation.currentFlow !== "GENERAL" && conversation.messageStep >= replyLimit) {
         conversation.status = "COMPLETED";
         yield conversation.save();
         return {
             conversation,
             assistantMessage: null,
-            conversationClosed: true,
+            conversationClosed: conversation.status === "COMPLETED",
         };
     }
     const nextStep = conversation.messageStep + 1;

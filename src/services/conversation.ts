@@ -1,10 +1,6 @@
 import httpStatus from "http-status";
 import mongoose from "mongoose";
-import {
-  ASSISTANT_DEFAULT_MESSAGE,
-  CONTACT_CAPTURE_MESSAGES,
-  PROFESSIONAL_REPLY_LIMIT,
-} from "../config/assistant";
+import { ASSISTANT_DEFAULT_MESSAGE, PROFESSIONAL_REPLY_LIMIT } from "../config/assistant";
 import db from "../models";
 import ApiError from "../utils/ApiError";
 import { IntentCategory } from "../types";
@@ -56,25 +52,6 @@ const extractContactData = (message: string) => ({
 
 const generateAnonymousUserId = () =>
   new mongoose.Types.ObjectId().toString();
-
-const getContactAcknowledgement = (contactData: {
-  email?: string;
-  phone?: string;
-}) => {
-  if (contactData.email && contactData.phone) {
-    return CONTACT_CAPTURE_MESSAGES.BOTH;
-  }
-
-  if (contactData.email) {
-    return CONTACT_CAPTURE_MESSAGES.EMAIL;
-  }
-
-  if (contactData.phone) {
-    return CONTACT_CAPTURE_MESSAGES.PHONE;
-  }
-
-  return CONTACT_CAPTURE_MESSAGES.REMINDER;
-};
 
 const startConversation = async ({ userId }: StartConversationInput) => {
   return {
@@ -143,16 +120,19 @@ const sendMessage = async ({ conversationId, userId, message }: SendMessageInput
   }
 
   const contactData = extractContactData(trimmedMessage);
-  if (contactData.email) {
-    conversation.capturedData.email = contactData.email;
-    conversation.tags = addUniqueTags(conversation.tags, ["EMAIL_RECEIVED"]);
-  }
-  if (contactData.phone) {
-    conversation.capturedData.phone = contactData.phone;
-    conversation.tags = addUniqueTags(conversation.tags, ["PHONE_RECEIVED"]);
-  }
 
   if (conversation.status === "COMPLETED") {
+    if (conversation.currentFlow && conversation.currentFlow !== "GENERAL") {
+      if (contactData.email) {
+        conversation.capturedData.email = contactData.email;
+        conversation.tags = addUniqueTags(conversation.tags, ["EMAIL_RECEIVED"]);
+      }
+      if (contactData.phone) {
+        conversation.capturedData.phone = contactData.phone;
+        conversation.tags = addUniqueTags(conversation.tags, ["PHONE_RECEIVED"]);
+      }
+    }
+
     await conversation.save();
     return {
       conversation,
@@ -166,26 +146,14 @@ const sendMessage = async ({ conversationId, userId, message }: SendMessageInput
     conversation.currentFlow &&
     conversation.currentFlow !== "GENERAL"
   ) {
-    const replyText = getContactAcknowledgement(contactData);
-    const assistantMessage = buildAssistantMessage(
-      conversation.currentFlow,
-      replyText,
-      conversation.messageStep + (contactData.email || contactData.phone ? 1 : 0)
-    );
-
-    conversation.messages.push(assistantMessage);
-
-    if (contactData.email || contactData.phone) {
-      conversation.messageStep += 1;
-      conversation.status = "COMPLETED";
-    }
+    conversation.status = "COMPLETED";
 
     await conversation.save();
 
     return {
       conversation,
-      assistantMessage,
-      conversationClosed: conversation.status === "COMPLETED",
+      assistantMessage: null,
+      conversationClosed: true,
     };
   }
 
@@ -212,14 +180,25 @@ const sendMessage = async ({ conversationId, userId, message }: SendMessageInput
     }
   }
 
+  if (conversation.currentFlow !== "GENERAL") {
+    if (contactData.email) {
+      conversation.capturedData.email = contactData.email;
+      conversation.tags = addUniqueTags(conversation.tags, ["EMAIL_RECEIVED"]);
+    }
+    if (contactData.phone) {
+      conversation.capturedData.phone = contactData.phone;
+      conversation.tags = addUniqueTags(conversation.tags, ["PHONE_RECEIVED"]);
+    }
+  }
+
   const replyLimit = getReplyLimitForFlow(conversation.currentFlow);
-  if (conversation.messageStep >= replyLimit) {
+  if (conversation.currentFlow !== "GENERAL" && conversation.messageStep >= replyLimit) {
     conversation.status = "COMPLETED";
     await conversation.save();
     return {
       conversation,
       assistantMessage: null,
-      conversationClosed: true,
+      conversationClosed: conversation.status === "COMPLETED",
     };
   }
 

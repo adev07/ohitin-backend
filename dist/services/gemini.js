@@ -19,6 +19,51 @@ const VALID_CATEGORIES = [
     "GENERAL",
 ];
 let client = null;
+const classifyIntentHeuristically = (message) => {
+    const text = message.trim().toLowerCase();
+    const investorSignals = [
+        "financial side",
+        "investment side",
+        "financing opportunity",
+        "financing opportunities",
+        "back this project",
+        "back the project",
+        "back films",
+        "back film projects",
+        "return on investment",
+        "roi",
+    ];
+    const producerSignals = [
+        "i produce",
+        "we produce",
+        "producing side",
+        "production side",
+        "executive produce",
+        "exec produce",
+        "line produce",
+        "put together projects",
+    ];
+    const creativeSignals = [
+        "work in film",
+        "work in movies",
+        "creative side",
+        "join the project creatively",
+        "join the team creatively",
+        "come on board creatively",
+        "story resonated",
+        "connected with the material",
+    ];
+    if (investorSignals.some((signal) => text.includes(signal))) {
+        return "INVESTOR";
+    }
+    if (producerSignals.some((signal) => text.includes(signal))) {
+        return "PRODUCER";
+    }
+    if (creativeSignals.some((signal) => text.includes(signal))) {
+        return "CREATIVE";
+    }
+    return FALLBACK_CATEGORY;
+};
 const getClient = () => {
     if (!process.env.GEMINI_API_KEY) {
         return null;
@@ -32,7 +77,7 @@ const classifyIntentWithGemini = (message) => __awaiter(void 0, void 0, void 0, 
     var _a;
     const geminiClient = getClient();
     if (!geminiClient) {
-        return FALLBACK_CATEGORY;
+        return classifyIntentHeuristically(message);
     }
     const response = yield geminiClient.models.generateContent({
         model: "gemini-2.5-flash",
@@ -42,8 +87,13 @@ const classifyIntentWithGemini = (message) => __awaiter(void 0, void 0, void 0, 
                 parts: [
                     {
                         text: [
-                            "Classify this message into exactly one category.",
+                            "Classify this message into exactly one user-intent category for the A DREAM conversation router.",
+                            "This classifier is only used when keyword routing does not find a match.",
                             "Valid outputs: INVESTOR, PRODUCER, CREATIVE, GENERAL.",
+                            "INVESTOR = investment, financing, capital, funders, backers.",
+                            "PRODUCER = producing, film producer, financing/production standpoint.",
+                            "CREATIVE = directors, filmmakers, actors, cinematographers, editors, composers, collaborators, development, packaging, attach talent.",
+                            "GENERAL = fan interest, curiosity about the story, Instagram discovery, non-professional interest.",
                             "Return only one word.",
                             `Message: ${message}`,
                         ].join("\n"),
@@ -56,7 +106,7 @@ const classifyIntentWithGemini = (message) => __awaiter(void 0, void 0, void 0, 
     if (value && VALID_CATEGORIES.includes(value)) {
         return value;
     }
-    return FALLBACK_CATEGORY;
+    return classifyIntentHeuristically(message);
 });
 exports.classifyIntentWithGemini = classifyIntentWithGemini;
 //# sourceMappingURL=gemini.js.map

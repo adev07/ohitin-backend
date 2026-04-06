@@ -19,14 +19,14 @@ const getCreativeSubtypeTags = (message) => {
 };
 exports.getCreativeSubtypeTags = getCreativeSubtypeTags;
 const routeMessageByKeyword = (message) => {
-    if (includesAnyKeyword(message, assistant_1.INVESTOR_KEYWORDS)) {
-        return "INVESTOR";
+    if (includesAnyKeyword(message, assistant_1.CREATIVE_KEYWORDS)) {
+        return "CREATIVE";
     }
     if (includesAnyKeyword(message, assistant_1.PRODUCER_KEYWORDS)) {
         return "PRODUCER";
     }
-    if (includesAnyKeyword(message, assistant_1.CREATIVE_KEYWORDS)) {
-        return "CREATIVE";
+    if (includesAnyKeyword(message, assistant_1.INVESTOR_KEYWORDS)) {
+        return "INVESTOR";
     }
     return null;
 };
@@ -36,13 +36,27 @@ const detectProducerBranch = (message) => {
     if (text.includes("creative") ||
         text.includes("director") ||
         text.includes("actor") ||
-        text.includes("filmmaker")) {
+        text.includes("actress") ||
+        text.includes("filmmaker") ||
+        text.includes("cinematographer") ||
+        text.includes("dp") ||
+        text.includes("composer") ||
+        text.includes("editor") ||
+        text.includes("production designer") ||
+        text.includes("development") ||
+        text.includes("packaging") ||
+        text.includes("collaborate") ||
+        text.includes("collaboration") ||
+        text.includes("attach talent") ||
+        text.includes("creative producer")) {
         return "creative";
     }
     if (text.includes("finance") ||
         text.includes("financing") ||
         text.includes("production") ||
-        text.includes("producer")) {
+        text.includes("producer") ||
+        text.includes("budget") ||
+        text.includes("fund")) {
         return "financing";
     }
     return null;

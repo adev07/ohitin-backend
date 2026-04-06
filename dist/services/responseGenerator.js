@@ -24,8 +24,9 @@ const buildUserMessage = (text) => ({
     createdAt: new Date(),
 });
 exports.buildUserMessage = buildUserMessage;
-const shouldWaitForContact = (flow, step) => flow !== "GENERAL" && step === assistant_1.PROFESSIONAL_REPLY_LIMIT;
+const shouldWaitForContact = (flow, step) => false;
 exports.shouldWaitForContact = shouldWaitForContact;
-const shouldCompleteAfterReply = (flow, step) => flow === "GENERAL" && step === assistant_1.GENERAL_REPLY_LIMIT;
+const shouldCompleteAfterReply = (flow, step) => (flow !== "GENERAL" && step === assistant_1.PROFESSIONAL_REPLY_LIMIT) ||
+    (flow === "GENERAL" && step === assistant_1.GENERAL_REPLY_LIMIT);
 exports.shouldCompleteAfterReply = shouldCompleteAfterReply;
 //# sourceMappingURL=responseGenerator.js.map

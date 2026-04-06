@@ -27,16 +27,16 @@ export const getCreativeSubtypeTags = (message: string): ConversationTag[] => {
 };
 
 export const routeMessageByKeyword = (message: string): IntentCategory | null => {
-  if (includesAnyKeyword(message, INVESTOR_KEYWORDS)) {
-    return "INVESTOR";
+  if (includesAnyKeyword(message, CREATIVE_KEYWORDS)) {
+    return "CREATIVE";
   }
 
   if (includesAnyKeyword(message, PRODUCER_KEYWORDS)) {
     return "PRODUCER";
   }
 
-  if (includesAnyKeyword(message, CREATIVE_KEYWORDS)) {
-    return "CREATIVE";
+  if (includesAnyKeyword(message, INVESTOR_KEYWORDS)) {
+    return "INVESTOR";
   }
 
   return null;
@@ -51,7 +51,19 @@ export const detectProducerBranch = (
     text.includes("creative") ||
     text.includes("director") ||
     text.includes("actor") ||
-    text.includes("filmmaker")
+    text.includes("actress") ||
+    text.includes("filmmaker") ||
+    text.includes("cinematographer") ||
+    text.includes("dp") ||
+    text.includes("composer") ||
+    text.includes("editor") ||
+    text.includes("production designer") ||
+    text.includes("development") ||
+    text.includes("packaging") ||
+    text.includes("collaborate") ||
+    text.includes("collaboration") ||
+    text.includes("attach talent") ||
+    text.includes("creative producer")
   ) {
     return "creative";
   }
@@ -60,7 +72,9 @@ export const detectProducerBranch = (
     text.includes("finance") ||
     text.includes("financing") ||
     text.includes("production") ||
-    text.includes("producer")
+    text.includes("producer") ||
+    text.includes("budget") ||
+    text.includes("fund")
   ) {
     return "financing";
   }
