@@ -10,8 +10,5 @@ const user_2 = require("../validators/user");
 const router = express_1.default.Router();
 router.post("/register", (0, validate_1.default)(user_2.createUserValidator), user_1.register);
 router.post("/login", (0, validate_1.default)(user_2.loginValidator), user_1.login);
-router.post("/forgot-password", (0, validate_1.default)(user_2.forgotPasswordValidator), user_1.forgotPassword);
-router.post("/verify-otp", (0, validate_1.default)(user_2.verifyOtpValidator), user_1.verifyOtp);
-router.post("/reset-password", (0, validate_1.default)(user_2.resetPasswordValidator), user_1.resetPassword);
 exports.default = router;
 //# sourceMappingURL=user.js.map

@@ -46,6 +46,18 @@ const extractContactData = (message) => {
     });
 };
 const generateAnonymousUserId = () => new mongoose_1.default.Types.ObjectId().toString();
+const getContactAcknowledgement = (contactData) => {
+    if (contactData.email && contactData.phone) {
+        return assistant_1.CONTACT_CAPTURE_MESSAGES.BOTH;
+    }
+    if (contactData.email) {
+        return assistant_1.CONTACT_CAPTURE_MESSAGES.EMAIL;
+    }
+    if (contactData.phone) {
+        return assistant_1.CONTACT_CAPTURE_MESSAGES.PHONE;
+    }
+    return null;
+};
 const startConversation = (_a) => __awaiter(void 0, [_a], void 0, function* ({ userId }) {
     return {
         _id: null,
@@ -127,12 +139,29 @@ const sendMessage = (_a) => __awaiter(void 0, [_a], void 0, function* ({ convers
     if (conversation.status === "WAITING_FOR_CONTACT" &&
         conversation.currentFlow &&
         conversation.currentFlow !== "GENERAL") {
-        conversation.status = "COMPLETED";
+        let assistantMessage = null;
+        if (contactData.email || contactData.phone) {
+            if (contactData.email) {
+                conversation.capturedData.email = contactData.email;
+                conversation.tags = (0, tagManager_1.addUniqueTags)(conversation.tags, ["EMAIL_RECEIVED"]);
+            }
+            if (contactData.phone) {
+                conversation.capturedData.phone = contactData.phone;
+                conversation.tags = (0, tagManager_1.addUniqueTags)(conversation.tags, ["PHONE_RECEIVED"]);
+            }
+            const acknowledgement = getContactAcknowledgement(contactData);
+            if (acknowledgement) {
+                assistantMessage = (0, responseGenerator_1.buildAssistantMessage)(conversation.currentFlow, acknowledgement, conversation.messageStep + 1);
+                conversation.messages.push(assistantMessage);
+                conversation.messageStep += 1;
+            }
+            conversation.status = "COMPLETED";
+        }
         yield conversation.save();
         return {
             conversation,
-            assistantMessage: null,
-            conversationClosed: true,
+            assistantMessage,
+            conversationClosed: conversation.status === "COMPLETED",
         };
     }
     if (!conversation.currentFlow) {

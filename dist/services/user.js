@@ -38,53 +38,8 @@ const loginUser = (body) => __awaiter(void 0, void 0, void 0, function* () {
     }
     return user;
 });
-const forgotPassword = (body) => __awaiter(void 0, void 0, void 0, function* () {
-    const { email } = body;
-    const user = yield models_1.default.user.findOne({ email });
-    if (!user) {
-        throw new ApiError_1.default(http_status_1.default.BAD_REQUEST, "User not found");
-    }
-    const generatedOtp = Math.floor(100000 + Math.random() * 900000);
-    const existingOtp = yield models_1.default.otp.findOne({ email });
-    if (existingOtp) {
-        existingOtp.otp = generatedOtp;
-        yield existingOtp.save();
-        return existingOtp;
-    }
-    return models_1.default.otp.create({ email, otp: generatedOtp });
-});
-const verifyOtp = (body) => __awaiter(void 0, void 0, void 0, function* () {
-    const { email, otp } = body;
-    const user = yield models_1.default.user.findOne({ email });
-    if (!user) {
-        throw new ApiError_1.default(http_status_1.default.BAD_REQUEST, "User not found");
-    }
-    const otpRecord = yield models_1.default.otp.findOne({ email, otp });
-    if (!otpRecord) {
-        throw new ApiError_1.default(http_status_1.default.BAD_REQUEST, "Invalid OTP");
-    }
-    return otpRecord;
-});
-const resetPassword = (body) => __awaiter(void 0, void 0, void 0, function* () {
-    const { email, otp, password } = body;
-    const user = yield models_1.default.user.findOne({ email });
-    if (!user) {
-        throw new ApiError_1.default(http_status_1.default.BAD_REQUEST, "User not found");
-    }
-    const otpRecord = yield models_1.default.otp.findOne({ email, otp });
-    if (!otpRecord) {
-        throw new ApiError_1.default(http_status_1.default.BAD_REQUEST, "Invalid OTP");
-    }
-    user.password = password;
-    yield user.save();
-    yield models_1.default.otp.deleteOne({ _id: otpRecord._id });
-    return user;
-});
 exports.default = {
     createUser,
     loginUser,
-    forgotPassword,
-    verifyOtp,
-    resetPassword,
 };
 //# sourceMappingURL=user.js.map
