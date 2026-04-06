@@ -141,6 +141,14 @@ const sendMessage = (_a) => __awaiter(void 0, [_a], void 0, function* ({ convers
         conversation.currentFlow !== "GENERAL") {
         let assistantMessage = null;
         if (contactData.email || contactData.phone) {
+            if (contactData.email) {
+                conversation.capturedData.email = contactData.email;
+                conversation.tags = (0, tagManager_1.addUniqueTags)(conversation.tags, ["EMAIL_RECEIVED"]);
+            }
+            if (contactData.phone) {
+                conversation.capturedData.phone = contactData.phone;
+                conversation.tags = (0, tagManager_1.addUniqueTags)(conversation.tags, ["PHONE_RECEIVED"]);
+            }
             const acknowledgement = getContactAcknowledgement(contactData);
             if (acknowledgement) {
                 assistantMessage = (0, responseGenerator_1.buildAssistantMessage)(conversation.currentFlow, acknowledgement, conversation.messageStep + 1);

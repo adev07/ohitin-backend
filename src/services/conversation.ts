@@ -172,6 +172,15 @@ const sendMessage = async ({ conversationId, userId, message }: SendMessageInput
     let assistantMessage = null;
 
     if (contactData.email || contactData.phone) {
+      if (contactData.email) {
+        conversation.capturedData.email = contactData.email;
+        conversation.tags = addUniqueTags(conversation.tags, ["EMAIL_RECEIVED"]);
+      }
+      if (contactData.phone) {
+        conversation.capturedData.phone = contactData.phone;
+        conversation.tags = addUniqueTags(conversation.tags, ["PHONE_RECEIVED"]);
+      }
+
       const acknowledgement = getContactAcknowledgement(contactData);
       if (acknowledgement) {
         assistantMessage = buildAssistantMessage(
