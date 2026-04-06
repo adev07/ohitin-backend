@@ -1,6 +1,10 @@
 import httpStatus from "http-status";
 import mongoose from "mongoose";
-import { ASSISTANT_DEFAULT_MESSAGE, PROFESSIONAL_REPLY_LIMIT } from "../config/assistant";
+import {
+  ASSISTANT_DEFAULT_MESSAGE,
+  CONTACT_CAPTURE_MESSAGES,
+  PROFESSIONAL_REPLY_LIMIT,
+} from "../config/assistant";
 import db from "../models";
 import ApiError from "../utils/ApiError";
 import { IntentCategory } from "../types";
@@ -52,6 +56,25 @@ const extractContactData = (message: string) => ({
 
 const generateAnonymousUserId = () =>
   new mongoose.Types.ObjectId().toString();
+
+const getContactAcknowledgement = (contactData: {
+  email?: string;
+  phone?: string;
+}) => {
+  if (contactData.email && contactData.phone) {
+    return CONTACT_CAPTURE_MESSAGES.BOTH;
+  }
+
+  if (contactData.email) {
+    return CONTACT_CAPTURE_MESSAGES.EMAIL;
+  }
+
+  if (contactData.phone) {
+    return CONTACT_CAPTURE_MESSAGES.PHONE;
+  }
+
+  return null;
+};
 
 const startConversation = async ({ userId }: StartConversationInput) => {
   return {
@@ -146,14 +169,29 @@ const sendMessage = async ({ conversationId, userId, message }: SendMessageInput
     conversation.currentFlow &&
     conversation.currentFlow !== "GENERAL"
   ) {
-    conversation.status = "COMPLETED";
+    let assistantMessage = null;
+
+    if (contactData.email || contactData.phone) {
+      const acknowledgement = getContactAcknowledgement(contactData);
+      if (acknowledgement) {
+        assistantMessage = buildAssistantMessage(
+          conversation.currentFlow,
+          acknowledgement,
+          conversation.messageStep + 1
+        );
+        conversation.messages.push(assistantMessage);
+        conversation.messageStep += 1;
+      }
+
+      conversation.status = "COMPLETED";
+    }
 
     await conversation.save();
 
     return {
       conversation,
-      assistantMessage: null,
-      conversationClosed: true,
+      assistantMessage,
+      conversationClosed: conversation.status === "COMPLETED",
     };
   }
 

@@ -32,62 +32,7 @@ const loginUser = async (body: { email: string; password: string }) => {
   return user;
 };
 
-const forgotPassword = async (body: { email: string }) => {
-  const { email } = body;
-  const user = await db.user.findOne({ email });
-  if (!user) {
-    throw new ApiError(httpStatus.BAD_REQUEST, "User not found");
-  }
-
-  const generatedOtp = Math.floor(100000 + Math.random() * 900000);
-  const existingOtp = await db.otp.findOne({ email });
-
-  if (existingOtp) {
-    existingOtp.otp = generatedOtp;
-    await existingOtp.save();
-    return existingOtp;
-  }
-
-  return db.otp.create({ email, otp: generatedOtp });
-};
-
-const verifyOtp = async (body: { email: string; otp: number }) => {
-  const { email, otp } = body;
-  const user = await db.user.findOne({ email });
-  if (!user) {
-    throw new ApiError(httpStatus.BAD_REQUEST, "User not found");
-  }
-
-  const otpRecord = await db.otp.findOne({ email, otp });
-  if (!otpRecord) {
-    throw new ApiError(httpStatus.BAD_REQUEST, "Invalid OTP");
-  }
-
-  return otpRecord;
-};
-
-const resetPassword = async (body: { email: string; otp: number; password: string }) => {
-  const { email, otp, password } = body;
-  const user = await db.user.findOne({ email });
-  if (!user) {
-    throw new ApiError(httpStatus.BAD_REQUEST, "User not found");
-  }
-
-  const otpRecord = await db.otp.findOne({ email, otp });
-  if (!otpRecord) {
-    throw new ApiError(httpStatus.BAD_REQUEST, "Invalid OTP");
-  }
-
-  user.password = password;
-  await user.save();
-  await db.otp.deleteOne({ _id: otpRecord._id });
-  return user;
-};
-
 export default {
   createUser,
   loginUser,
-  forgotPassword,
-  verifyOtp,
-  resetPassword,
 };
