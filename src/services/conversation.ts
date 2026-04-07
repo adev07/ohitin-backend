@@ -8,9 +8,9 @@ import {
 import db from "../models";
 import ApiError from "../utils/ApiError";
 import { IntentCategory } from "../types";
-import { classifyIntentWithGemini } from "./gemini";
+import { classifyIntentWithGemini, generateChatResponse } from "./gemini";
 import { addUniqueTags, mapIntentToTags } from "./tagManager";
-import { detectProducerBranch, routeMessageByKeyword } from "./keywordRouter";
+import { detectProducerBranch, detectSelfIdentification, routeMessageByKeyword } from "./keywordRouter";
 import { getFlowReply, getReplyLimitForFlow } from "./flowEngine";
 import {
   buildAssistantMessage,
@@ -34,18 +34,23 @@ const phoneRegex =
   /(?:(?:\+?\d{1,3}[\s-]?)?(?:\(?\d{3}\)?[\s-]?)\d{3}[\s-]?\d{4})/;
 
 const resolveIntent = async (message: string) => {
-  const keywordMatch = routeMessageByKeyword(message);
-  if (keywordMatch) {
+  // 1. Check for explicit self-identification (strongest signal)
+  //    e.g., "I am a producer", "I want to invest"
+  const selfId = detectSelfIdentification(message);
+  if (selfId) {
     return {
-      category: keywordMatch,
+      category: selfId,
       source: "keyword" as const,
     };
   }
 
-  const geminiCategory = await classifyIntentWithGemini(message);
+  // 2. Use AI classification (context-aware, distinguishes questions from intent)
+  const aiCategory = await classifyIntentWithGemini(message);
   return {
-    category: geminiCategory,
-    source: process.env.GEMINI_API_KEY ? ("gemini" as const) : ("fallback" as const),
+    category: aiCategory,
+    source: process.env.GEMINI_API_KEY || process.env.OPENAI_API_KEY
+      ? ("gemini" as const)
+      : ("fallback" as const),
   };
 };
 
@@ -205,6 +210,7 @@ const sendMessage = async ({ conversationId, userId, message }: SendMessageInput
   }
 
   if (!conversation.currentFlow) {
+    // First message — classify intent
     const intent = await resolveIntent(trimmedMessage);
     conversation.currentFlow = intent.category;
     conversation.classificationSource = intent.source;
@@ -214,16 +220,40 @@ const sendMessage = async ({ conversationId, userId, message }: SendMessageInput
       ...mapIntentToTags(intent.category, trimmedMessage),
       "ENGAGED",
     ]);
-  } else if (conversation.currentFlow === "PRODUCER" && conversation.messageStep === 1) {
-    const branch = detectProducerBranch(trimmedMessage);
-    if (branch === "creative") {
+  } else {
+    // Subsequent messages — check if user reveals professional intent
+    // Use self-identification detection (not broad keywords) to avoid
+    // misclassifying questions like "Who is the director?" as CREATIVE
+    const keywordMatch = detectSelfIdentification(trimmedMessage);
+
+    if (keywordMatch && keywordMatch !== conversation.currentFlow) {
+      // User explicitly identified as a professional — switch flow
+      console.log(
+        `🔄 Flow upgrade: ${conversation.currentFlow} → ${keywordMatch} (keyword)`
+      );
+      conversation.currentFlow = keywordMatch;
+      conversation.classificationSource = "keyword";
+      conversation.profileType = "professional";
+      conversation.messageStep = 0; // Reset step for new flow
       conversation.tags = addUniqueTags(conversation.tags, [
-        "CREATIVE",
-        "PRODUCER_CREATIVE",
+        ...mapIntentToTags(keywordMatch, trimmedMessage),
       ]);
-    }
-    if (branch === "financing") {
-      conversation.tags = addUniqueTags(conversation.tags, ["PRODUCER_FINANCING"]);
+    } else if (
+      conversation.currentFlow === "PRODUCER" &&
+      conversation.messageStep === 1
+    ) {
+      const branch = detectProducerBranch(trimmedMessage);
+      if (branch === "creative") {
+        conversation.tags = addUniqueTags(conversation.tags, [
+          "CREATIVE",
+          "PRODUCER_CREATIVE",
+        ]);
+      }
+      if (branch === "financing") {
+        conversation.tags = addUniqueTags(conversation.tags, [
+          "PRODUCER_FINANCING",
+        ]);
+      }
     }
   }
 
@@ -266,11 +296,25 @@ const sendMessage = async ({ conversationId, userId, message }: SendMessageInput
     }
   }
 
-  const replyText = getFlowReply(
-    conversation.currentFlow,
-    nextStep,
-    producerBranch
-  );
+  let replyText: string;
+
+  if (conversation.currentFlow === "GENERAL") {
+    // Use Gemini AI for dynamic, contextual responses in the GENERAL flow
+    const aiResponse = await generateChatResponse(conversation.messages);
+    replyText = aiResponse || getFlowReply(
+      conversation.currentFlow,
+      nextStep,
+      producerBranch
+    );
+  } else {
+    // Professional flows use scripted responses for lead capture
+    replyText = getFlowReply(
+      conversation.currentFlow,
+      nextStep,
+      producerBranch
+    );
+  }
+
   const assistantMessage = buildAssistantMessage(
     conversation.currentFlow,
     replyText,
