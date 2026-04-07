@@ -127,6 +127,8 @@ const getFunnel = () => __awaiter(void 0, void 0, void 0, function* () {
         {
             $group: {
                 _id: null,
+                ACTIVE: { $sum: { $cond: [{ $eq: ["$status", "ACTIVE"] }, 1, 0] } },
+                COMPLETED: { $sum: { $cond: [{ $eq: ["$status", "COMPLETED"] }, 1, 0] } },
                 NEW: { $sum: { $cond: [{ $in: ["NEW", "$tags"] }, 1, 0] } },
                 ENGAGED: { $sum: { $cond: [{ $in: ["ENGAGED", "$tags"] }, 1, 0] } },
                 WAITING_FOR_CONTACT: {
@@ -142,6 +144,8 @@ const getFunnel = () => __awaiter(void 0, void 0, void 0, function* () {
         },
     ]);
     return (result || {
+        ACTIVE: 0,
+        COMPLETED: 0,
         NEW: 0,
         ENGAGED: 0,
         WAITING_FOR_CONTACT: 0,
