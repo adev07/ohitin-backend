@@ -71,19 +71,19 @@ export const FLOW_MESSAGES = {
     "Thank you for reaching out — we truly appreciate your interest in A DREAM. May I ask what initially caught your attention about the project?",
     "Thank you for sharing that. Out of curiosity, have you previously been involved with film investments or projects in development?",
     "That’s really interesting to hear. When you look at a new project, what usually draws your interest first — the story itself, the creative team involved, or the overall potential of the project?",
-    "I’ve really appreciated hearing your perspective on this. If you're open to continuing the conversation, feel free to share your preferred way of communication — email or phone — and someone from our team will follow up with you directly.",
+    "I’ve really appreciated hearing your perspective on this. If you’re open to continuing the conversation, just drop your email or phone number right here in this chat and someone from our team will follow up with you directly.",
   ],
   PRODUCER: [
-    "Thank you for reaching out — we really appreciate your interest in A DREAM. May I ask if you're approaching this more from a creative standpoint or from a financing / production standpoint?",
+    "Thank you for reaching out — we really appreciate your interest in A DREAM. May I ask if you’re approaching this more from a creative standpoint or from a financing / production standpoint?",
     "Thank you for clarifying. May I ask what types of projects you typically help finance?",
     "That’s really helpful to hear. When you look at a new project, what usually draws your interest first — the story itself, the creative team attached, or the overall production approach? And are you usually involved during the development stage, or later when projects move into production and financing?",
-    "I’ve really appreciated hearing your perspective on this. If you're open to continuing the conversation, feel free to share your preferred way of communication — email or phone — and someone from our team will follow up with you directly.",
+    "I’ve really appreciated hearing your perspective on this. If you’re open to continuing the conversation, just drop your email or phone number right here in this chat and someone from our team will follow up with you directly.",
   ],
   CREATIVE: [
     "Thank you for reaching out — we really appreciate your interest in A DREAM. May I ask what aspect of the story resonated with you?",
     "It’s always interesting to hear how people connect with the material. Out of curiosity, what type of creative work do you usually focus on?",
     "That’s great to hear. What kinds of stories or characters tend to draw you in the most when you’re developing or collaborating on a project?",
-    "I’ve really appreciated hearing your perspective on this. If you're open to continuing the conversation, feel free to share your preferred way of communication — email or phone — and someone from our team will follow up with you directly.",
+    "I’ve really appreciated hearing your perspective on this. If you’re open to continuing the conversation, just drop your email or phone number right here in this chat and someone from our team will follow up with you directly.",
   ],
   GENERAL: [
     "Thanks for reaching out! Great to see someone interested in A DREAM. What caught your eye about the project?",
@@ -101,9 +101,9 @@ export const GENERAL_CONTINUATION_MESSAGES = [
 ] as const;
 
 export const CONTACT_CAPTURE_MESSAGES = {
-  BOTH: "Thank you for sharing your email and phone number. I’ve noted both, and someone will reach out soon.",
-  EMAIL: "Thank you for sharing your email. I’ve noted it, and someone will reach out soon.",
-  PHONE: "Thank you for sharing your phone number. I’ve noted it, and someone will reach out soon.",
+  BOTH: "Got it — I’ve noted your email and phone number. Someone from our team will reach out to you soon.",
+  EMAIL: "Got it — I’ve noted your email. Someone from our team will reach out to you soon.",
+  PHONE: "Got it — I’ve noted your phone number. Someone from our team will reach out to you soon.",
   REMINDER:
-    "Whenever you're ready, feel free to share your preferred email or phone number so someone can follow up.",
+    "Whenever you’re ready, just drop your email or phone number right here in this chat so someone from our team can follow up with you.",
 } as const;
