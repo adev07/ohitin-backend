@@ -204,7 +204,7 @@ const generateWithGemini = async (
           model,
           config: {
             systemInstruction: FILM_CHATBOT_SYSTEM_PROMPT,
-            temperature: 0.8,
+            temperature: 0.6,
             topP: 0.9,
             maxOutputTokens: 1024,
           },
@@ -217,13 +217,15 @@ const generateWithGemini = async (
           return text;
         }
       } catch (error: any) {
-        const is503 = error?.status === 503 || error?.message?.includes("503");
+        const status = error?.status || error?.code;
+        const is503 = status === 503 || error?.message?.includes("503");
+        const isRetryable = is503 || status === 429 || status === 500;
         console.warn(
-          `Gemini [${model}] attempt ${attempt}/${MAX_RETRIES} failed${is503 ? " (503)" : ""}:`,
+          `⚠️ Gemini [${model}] attempt ${attempt}/${MAX_RETRIES} failed (status: ${status || "unknown"}):`,
           error?.message || error
         );
 
-        if (is503 && attempt < MAX_RETRIES) {
+        if (isRetryable && attempt < MAX_RETRIES) {
           await sleep(1000 * Math.pow(2, attempt - 1));
           continue;
         }
@@ -246,7 +248,7 @@ const generateWithOpenAI = async (
       model: "gpt-4o-mini",
       messages,
       max_tokens: 1024,
-      temperature: 0.8,
+      temperature: 0.6,
       top_p: 0.9,
     });
 
@@ -266,14 +268,27 @@ const generateWithOpenAI = async (
 export const generateChatResponse = async (
   conversationHistory: MessageRecord[]
 ): Promise<string | null> => {
-  // Try Gemini first
-  const geminiHistory = conversationHistory.map((msg) => ({
-    role: msg.sender === "assistant" ? ("model" as const) : ("user" as const),
-    parts: [{ text: msg.text }],
-  }));
+  // Gemini requires the first message to be from the user role.
+  // The conversation history typically starts with the assistant greeting,
+  // so we need to filter/adjust the history for Gemini compatibility.
+  const geminiHistory: { role: "model" | "user"; parts: { text: string }[] }[] = [];
+  let foundFirstUser = false;
 
-  const geminiResult = await generateWithGemini(geminiHistory);
-  if (geminiResult) return geminiResult;
+  for (const msg of conversationHistory) {
+    const role = msg.sender === "assistant" ? ("model" as const) : ("user" as const);
+    if (!foundFirstUser && role === "model") {
+      // Skip assistant messages before the first user message
+      // (Gemini requires conversation to start with "user" role)
+      continue;
+    }
+    foundFirstUser = true;
+    geminiHistory.push({ role, parts: [{ text: msg.text }] });
+  }
+
+  if (geminiHistory.length > 0) {
+    const geminiResult = await generateWithGemini(geminiHistory);
+    if (geminiResult) return geminiResult;
+  }
 
   // Fallback to OpenAI
   const openaiMessages: { role: "system" | "user" | "assistant"; content: string }[] = [

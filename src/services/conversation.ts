@@ -299,13 +299,16 @@ const sendMessage = async ({ conversationId, userId, message }: SendMessageInput
   let replyText: string;
 
   if (conversation.currentFlow === "GENERAL") {
-    // Use Gemini AI for dynamic, contextual responses in the GENERAL flow
+    // Use AI for dynamic, contextual responses in the GENERAL flow
     const aiResponse = await generateChatResponse(conversation.messages);
-    replyText = aiResponse || getFlowReply(
-      conversation.currentFlow,
-      nextStep,
-      producerBranch
-    );
+    if (aiResponse) {
+      replyText = aiResponse;
+    } else {
+      // AI failed — use a honest fallback instead of a scripted non-answer
+      console.warn("⚠️ AI response failed for GENERAL flow, using fallback");
+      replyText =
+        "Sorry, I'm having a bit of trouble right now. Could you try asking that again?";
+    }
   } else {
     // Professional flows use scripted responses for lead capture
     replyText = getFlowReply(
