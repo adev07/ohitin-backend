@@ -204,7 +204,7 @@ const generateWithGemini = async (
           model,
           config: {
             systemInstruction: FILM_CHATBOT_SYSTEM_PROMPT,
-            temperature: 0.8,
+            temperature: 0.6,
             topP: 0.9,
             maxOutputTokens: 1024,
           },
@@ -246,7 +246,7 @@ const generateWithOpenAI = async (
       model: "gpt-4o-mini",
       messages,
       max_tokens: 1024,
-      temperature: 0.8,
+      temperature: 0.6,
       top_p: 0.9,
     });
 

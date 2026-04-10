@@ -64,7 +64,7 @@ export const CREATIVE_SUBTYPE_TAGS: Record<string, string> = {
 };
 
 export const PROFESSIONAL_REPLY_LIMIT = 4;
-export const GENERAL_REPLY_LIMIT = 5;
+export const GENERAL_REPLY_LIMIT = 20;
 
 export const FLOW_MESSAGES = {
   INVESTOR: [
@@ -86,18 +86,18 @@ export const FLOW_MESSAGES = {
     "I’ve really appreciated hearing your perspective on this. If you're open to continuing the conversation, feel free to share your preferred way of communication — email or phone — and someone from our team will follow up with you directly.",
   ],
   GENERAL: [
-    "Thank you for reaching out — it really means a lot to see people interested in A DREAM. What initially caught your attention about the project?",
-    "I appreciate you sharing that. Stories inspired by real events tend to resonate in very different ways with people. What kinds of emotionally driven films or true stories tend to stay with you the most?",
-    "That’s really interesting. Many people connect with stories that explore personal journeys and moments of change. Is there a particular film or story that has stayed with you over the years?",
-    "Those are exactly the kinds of stories that tend to inspire meaningful conversations. Thank you again for taking the time to share your perspective.",
-    "Out of curiosity, what kinds of characters or personal journeys usually resonate with you the most in films like these?",
+    "Thanks for reaching out! Great to see someone interested in A DREAM. What caught your eye about the project?",
+    "Interesting — stories based on real events hit different for everyone. What drew you to this one specifically?",
+    "That makes sense. A lot of people find something personal in Jalin’s journey. Is there anything specific about the film you’d like to know more about?",
+    "Glad we got to chat about this. If you have more questions about A DREAM, I’m here.",
+    "Anything else you’re curious about — the story, the characters, how it came together?",
   ],
 } as const;
 
 export const GENERAL_CONTINUATION_MESSAGES = [
-  "I appreciate you sharing that. It’s always interesting to hear how different people connect with stories like A DREAM.",
-  "That’s thoughtful to hear. Emotionally grounded stories tend to stay with people for very personal reasons.",
-  "Thank you for sharing your perspective. What kinds of themes or character journeys usually stay with you the longest?",
+  "That’s a really interesting way to look at it. Is there anything else about the film you’re curious about?",
+  "Good question — I’d love to keep chatting. What else is on your mind about A DREAM?",
+  "There’s a lot to unpack with this story. Anything else you want to know?",
 ] as const;
 
 export const CONTACT_CAPTURE_MESSAGES = {
