@@ -8,6 +8,15 @@ import {
   getAnalyticsOverview,
   getAnalyticsTags,
 } from "../controllers/admin";
+import {
+  getInstagramOverview,
+  getInstagramConversations,
+  getInstagramConversation,
+  getMetaSettings,
+  saveMetaSettings,
+  deleteMetaSettings,
+  testMetaConnection,
+} from "../controllers/instagramAdmin";
 import { authMiddleware } from "../middleware/auth";
 import validate from "../middleware/validate";
 import { adminLoginValidator, analyticsListValidator } from "../validators/admin";
@@ -32,5 +41,16 @@ router.get(
 );
 router.get("/analytics/tags", authMiddleware, getAnalyticsTags);
 router.get("/analytics/funnel", authMiddleware, getAnalyticsFunnel);
+
+// ─── Instagram Admin ────────────────────────────────────────────────
+router.get("/instagram/overview", authMiddleware, getInstagramOverview);
+router.get("/instagram/conversations", authMiddleware, getInstagramConversations);
+router.get("/instagram/conversations/:id", authMiddleware, getInstagramConversation);
+
+// ─── Meta Settings ──────────────────────────────────────────────────
+router.get("/settings/meta", authMiddleware, getMetaSettings);
+router.post("/settings/meta", authMiddleware, saveMetaSettings);
+router.delete("/settings/meta", authMiddleware, deleteMetaSettings);
+router.post("/settings/meta/test", authMiddleware, testMetaConnection);
 
 export default router;
