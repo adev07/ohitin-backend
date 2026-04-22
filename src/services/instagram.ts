@@ -20,6 +20,20 @@ import {
 } from "./instagramApi";
 import metaSettingsService from "./metaSettings";
 
+
+const log = (stage: string, data?: Record<string, unknown>) => {
+  if (data !== undefined) {
+    console.log(`[IG] ${stage}`, JSON.stringify(data));
+  } else {
+    console.log(`[IG] ${stage}`);
+  }
+};
+
+const logErr = (stage: string, err: unknown, data?: Record<string, unknown>) => {
+  const info = err instanceof Error ? { message: err.message, stack: err.stack } : { err };
+  console.error(`[IG] ${stage}`, JSON.stringify({ ...info, ...(data ?? {}) }));
+};
+
 // ─── Types ──────────────────────────────────────────────────────────
 
 interface WebhookPayload {
@@ -90,6 +104,7 @@ const getOrCreateConversation = async (
   });
 
   if (!conversation) {
+    log("conversation.create", { instagramUserId, instagramPageId });
     conversation = await InstagramConversation.create({
       instagramUserId,
       instagramPageId,
@@ -110,6 +125,15 @@ const getOrCreateConversation = async (
       classificationSource: "fallback",
       status: "ACTIVE",
     });
+  } else {
+    log("conversation.loaded", {
+      instagramUserId,
+      instagramPageId,
+      status: conversation.status,
+      currentFlow: conversation.currentFlow,
+      messageStep: conversation.messageStep,
+      messageCount: conversation.messages.length,
+    });
   }
 
   return conversation;
@@ -125,19 +149,42 @@ const processMessagingEvent = async (event: MessagingEvent) => {
   // Handle postback (button tap) as text
   const messageText = event.message?.text ?? event.postback?.payload;
 
-  // Skip read receipts, echos, empty messages
-  if (event.read || isEcho || !senderId || !recipientId || !messageText) return;
+  log("event.received", {
+    senderId,
+    recipientId,
+    hasText: Boolean(event.message?.text),
+    hasPostback: Boolean(event.postback),
+    isEcho,
+    isRead: Boolean(event.read),
+    mid: event.message?.mid,
+  });
+
+  if (event.read || isEcho || !senderId || !recipientId || !messageText) {
+    log("event.skipped", {
+      reason: event.read
+        ? "read-receipt"
+        : isEcho
+          ? "echo"
+          : !senderId
+            ? "no-sender"
+            : !recipientId
+              ? "no-recipient"
+              : "empty-text",
+    });
+    return;
+  }
 
   const accessToken = await metaSettingsService.getAccessToken();
   if (!accessToken) {
-    console.error("Instagram access token is not configured");
+    logErr("event.no-access-token", new Error("Instagram access token is not configured"));
     return;
   }
+  log("event.access-token-resolved", { tokenLen: accessToken.length });
 
   try {
     await processIncomingMessage(senderId, recipientId, messageText, accessToken);
   } catch (error) {
-    console.error("Error processing Instagram message:", error);
+    logErr("event.process-failed", error, { senderId, recipientId });
   }
 };
 
@@ -149,13 +196,17 @@ const processIncomingMessage = async (
   messageText: string,
   accessToken: string
 ) => {
+  log("incoming.start", { senderId, pageId, messageText });
   const conversation = await getOrCreateConversation(senderId, pageId);
 
   // Send typing indicator while we process
-  await sendInstagramTypingIndicator(accessToken, senderId).catch(() => {});
+  await sendInstagramTypingIndicator(accessToken, senderId).catch((err) => {
+    logErr("typing-indicator.failed", err, { senderId });
+  });
 
   // Process the message through the AI pipeline (same logic as chatbot)
   await processAIResponse(senderId, messageText, conversation, accessToken);
+  log("incoming.done", { senderId });
 };
 
 // ─── AI pipeline (mirrors chatbot conversation.sendMessage) ─────────
@@ -167,7 +218,17 @@ const processAIResponse = async (
   accessToken: string
 ) => {
   const trimmedMessage = messageText.trim();
-  if (!trimmedMessage) return;
+  if (!trimmedMessage) {
+    log("ai.skip.empty", { senderId });
+    return;
+  }
+
+  log("ai.start", {
+    senderId,
+    status: conversation.status,
+    currentFlow: conversation.currentFlow,
+    messageStep: conversation.messageStep,
+  });
 
   // Record user message
   conversation.messages.push(buildUserMessage(trimmedMessage));
@@ -180,6 +241,13 @@ const processAIResponse = async (
 
   // ── Completed conversation ──
   if (conversation.status === "COMPLETED") {
+    log("ai.branch.completed", {
+      senderId,
+      currentFlow: conversation.currentFlow,
+      hasEmail: Boolean(contactData.email),
+      hasPhone: Boolean(contactData.phone),
+      note: "no reply will be sent — conversation already COMPLETED",
+    });
     if (conversation.currentFlow && conversation.currentFlow !== "GENERAL") {
       if (contactData.email) {
         conversation.capturedData.email = contactData.email;
@@ -200,6 +268,15 @@ const processAIResponse = async (
     conversation.currentFlow &&
     conversation.currentFlow !== "GENERAL"
   ) {
+    log("ai.branch.waiting-for-contact", {
+      senderId,
+      currentFlow: conversation.currentFlow,
+      hasEmail: Boolean(contactData.email),
+      hasPhone: Boolean(contactData.phone),
+      note: contactData.email || contactData.phone
+        ? "contact received — will acknowledge and COMPLETE"
+        : "no contact in message — saving silently, no reply",
+    });
     if (contactData.email || contactData.phone) {
       if (contactData.email) {
         conversation.capturedData.email = contactData.email;
@@ -236,6 +313,11 @@ const processAIResponse = async (
   // ── Intent classification (first message or flow upgrade) ──
   if (!conversation.currentFlow) {
     const intent = await resolveIntent(trimmedMessage);
+    log("ai.intent.classified", {
+      senderId,
+      category: intent.category,
+      source: intent.source,
+    });
     conversation.currentFlow = intent.category;
     conversation.classificationSource = intent.source;
     conversation.profileType =
@@ -287,6 +369,7 @@ const processAIResponse = async (
 
   // Safety: currentFlow must be set by now
   if (!conversation.currentFlow) {
+    log("ai.skip.no-flow", { senderId, note: "currentFlow still null after classification — saving silently" });
     await conversation.save();
     return;
   }
@@ -297,6 +380,13 @@ const processAIResponse = async (
     conversation.currentFlow !== "GENERAL" &&
     conversation.messageStep >= replyLimit
   ) {
+    log("ai.reply-limit.hit", {
+      senderId,
+      currentFlow: conversation.currentFlow,
+      messageStep: conversation.messageStep,
+      replyLimit,
+      note: "flipping to COMPLETED, no reply sent",
+    });
     conversation.status = "COMPLETED";
     await conversation.save();
     return;
@@ -323,12 +413,15 @@ const processAIResponse = async (
   let replyText: string;
 
   if (conversation.currentFlow === "GENERAL") {
+    log("ai.reply.generating-general", { senderId, historyLen: conversation.messages.length });
     const aiResponse = await generateChatResponse(conversation.messages);
     if (aiResponse) {
       replyText = aiResponse;
+      log("ai.reply.general-ok", { senderId, replyLen: replyText.length });
     } else {
       replyText =
         "Sorry, I'm having a bit of trouble right now. Could you try asking that again?";
+      logErr("ai.reply.general-fallback", new Error("All AI providers returned null"), { senderId });
     }
   } else {
     replyText = getFlowReply(
@@ -336,6 +429,13 @@ const processAIResponse = async (
       nextStep,
       producerBranch
     );
+    log("ai.reply.flow", {
+      senderId,
+      currentFlow: conversation.currentFlow,
+      nextStep,
+      producerBranch,
+      replyLen: replyText.length,
+    });
   }
 
   const assistantMessage = buildAssistantMessage(
@@ -349,12 +449,20 @@ const processAIResponse = async (
 
   if (shouldWaitForContact(conversation.currentFlow, nextStep)) {
     conversation.status = "WAITING_FOR_CONTACT";
+    log("ai.status.waiting-for-contact", { senderId, currentFlow: conversation.currentFlow, nextStep });
   }
 
   await conversation.save();
+  log("ai.saved", { senderId, status: conversation.status, messageStep: conversation.messageStep });
 
   // ── Send reply via Instagram Graph API ──
-  await sendInstagramMessage(accessToken, senderId, replyText);
+  log("ai.send.start", { senderId, replyLen: replyText.length });
+  try {
+    const res = await sendInstagramMessage(accessToken, senderId, replyText);
+    log("ai.send.done", { senderId, ok: res.ok, status: res.status });
+  } catch (err) {
+    logErr("ai.send.threw", err, { senderId });
+  }
 };
 
 // ─── Webhook handler entry points ───────────────────────────────────
@@ -365,14 +473,30 @@ const processAIResponse = async (
  */
 export const handleInstagramWebhook = async (payload: WebhookPayload) => {
   const entries = payload.entry ?? [];
+  log("webhook.received", {
+    object: payload.object,
+    entryCount: entries.length,
+    messagingCounts: entries.map((e) => e.messaging?.length ?? 0),
+  });
+
+  if (entries.length === 0) {
+    log("webhook.no-entries", { rawPayload: payload });
+    return;
+  }
 
   for (const entry of entries) {
     if (Array.isArray(entry.messaging) && entry.messaging.length) {
       await Promise.all(
         entry.messaging.map((event) => processMessagingEvent(event))
       );
+    } else {
+      log("webhook.entry-no-messaging", {
+        entryId: entry.id,
+        keys: Object.keys(entry),
+      });
     }
   }
+  log("webhook.done");
 };
 
 /**
@@ -388,6 +512,13 @@ export const verifyInstagramWebhook = async (query: {
   const challenge = query["hub.challenge"];
 
   const verifyToken = await metaSettingsService.getVerifyToken();
+
+  log("webhook.verify.request", {
+    mode,
+    tokenProvided: Boolean(token),
+    tokenConfigured: Boolean(verifyToken),
+    tokenMatch: Boolean(verifyToken) && token === verifyToken,
+  });
 
   if (mode === "subscribe" && token === verifyToken) {
     return { success: true, challenge };

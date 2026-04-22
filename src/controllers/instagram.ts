@@ -9,13 +9,14 @@ import {
  * Meta calls this to verify the webhook subscription.
  */
 export const webhookVerification = async (req: Request, res: Response) => {
+  console.log("[IG] http.GET /webhook (verification)", JSON.stringify(req.query));
   const result = await verifyInstagramWebhook(req.query as any);
 
   if (result.success) {
-    console.log("✅ Instagram webhook verified");
+    console.log("[IG] ✅ webhook.verified");
     res.status(200).send(result.challenge);
   } else {
-    console.warn("❌ Instagram webhook verification failed");
+    console.warn("[IG] ❌ webhook.verify-failed");
     res.sendStatus(403);
   }
 };
@@ -26,11 +27,20 @@ export const webhookVerification = async (req: Request, res: Response) => {
  * We respond 200 immediately, then process asynchronously.
  */
 export const webhookHandler = (req: Request, res: Response) => {
+  console.log(
+    "[IG] http.POST /webhook",
+    JSON.stringify({
+      contentType: req.headers["content-type"],
+      bodyKeys: req.body ? Object.keys(req.body) : [],
+      entryCount: Array.isArray(req.body?.entry) ? req.body.entry.length : 0,
+    })
+  );
+
   // Respond immediately so Meta doesn't retry
   res.status(200).send("EVENT_RECEIVED");
 
   // Process in background — don't await
   handleInstagramWebhook(req.body).catch((err) => {
-    console.error("Instagram webhook processing error:", err);
+    console.error("[IG] webhook.processing-error", err instanceof Error ? err.stack : err);
   });
 };
