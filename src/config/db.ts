@@ -1,4 +1,4 @@
-import mongoose, { ConnectOptions } from "mongoose";
+import mongoose from "mongoose";
 import dotenv from "dotenv";
 import db from "../models";
 dotenv.config();
@@ -24,10 +24,7 @@ export const connectDB = async (): Promise<void> => {
   }
 
   try {
-    cachedConnection = mongoose.connect(MONGO_URL, {
-      useNewUrlParser: true,
-      useUnifiedTopology: true,
-    } as ConnectOptions);
+    cachedConnection = mongoose.connect(MONGO_URL);
 
     await cachedConnection;
     await ensureDefaultAdmin();
