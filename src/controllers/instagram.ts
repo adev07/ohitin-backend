@@ -26,7 +26,7 @@ export const webhookVerification = async (req: Request, res: Response) => {
  * Meta sends incoming DM events here.
  * We respond 200 immediately, then process asynchronously.
  */
-export const webhookHandler = (req: Request, res: Response) => {
+export const webhookHandler = async (req: Request, res: Response) => {
   console.log(
     "[IG] http.POST /webhook",
     JSON.stringify({
@@ -36,11 +36,14 @@ export const webhookHandler = (req: Request, res: Response) => {
     })
   );
 
-  // Respond immediately so Meta doesn't retry
-  res.status(200).send("EVENT_RECEIVED");
+  try {
+    await handleInstagramWebhook(req.body);
+  } catch (err) {
+    console.error(
+      "[IG] webhook.processing-error",
+      err instanceof Error ? err.stack : err
+    );
+  }
 
-  // Process in background — don't await
-  handleInstagramWebhook(req.body).catch((err) => {
-    console.error("[IG] webhook.processing-error", err instanceof Error ? err.stack : err);
-  });
+  res.status(200).send("EVENT_RECEIVED");
 };
