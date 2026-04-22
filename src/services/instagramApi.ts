@@ -5,18 +5,48 @@
 const GRAPH_API_BASE = "https://graph.instagram.com/v18.0/me/messages";
 
 const graphFetch = async (accessToken: string, body: object) => {
-  const res = await fetch(GRAPH_API_BASE, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(body),
-  });
+  const started = Date.now();
+  let res: Response;
+  try {
+    res = await fetch(GRAPH_API_BASE, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(body),
+    });
+  } catch (err) {
+    console.error(
+      "[IG] graph.fetch-threw",
+      JSON.stringify({
+        ms: Date.now() - started,
+        error: err instanceof Error ? err.message : String(err),
+      })
+    );
+    throw err;
+  }
 
   if (!res.ok) {
     const text = await res.text();
-    console.error(`Instagram API error (${res.status}):`, text);
+    console.error(
+      "[IG] graph.error",
+      JSON.stringify({
+        status: res.status,
+        ms: Date.now() - started,
+        bodyKeys: Object.keys(body),
+        response: text,
+      })
+    );
+  } else {
+    console.log(
+      "[IG] graph.ok",
+      JSON.stringify({
+        status: res.status,
+        ms: Date.now() - started,
+        bodyKeys: Object.keys(body),
+      })
+    );
   }
 
   return res;
