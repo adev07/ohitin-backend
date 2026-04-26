@@ -307,7 +307,7 @@ const sendMessage = async ({ conversationId, userId, message }: SendMessageInput
       // AI failed — use a honest fallback instead of a scripted non-answer
       console.warn("⚠️ AI response failed for GENERAL flow, using fallback");
       replyText =
-        "Sorry, I'm having a bit of trouble right now. Could you try asking that again?";
+        "Hmm, give me a sec on that one — could you rephrase or ask again?";
     }
   } else {
     // Professional flows use scripted responses for lead capture

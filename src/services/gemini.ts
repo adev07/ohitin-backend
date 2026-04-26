@@ -1,4 +1,4 @@
-import { GoogleGenAI } from "@google/genai";
+import { GoogleGenAI, HarmBlockThreshold, HarmCategory } from "@google/genai";
 import OpenAI from "openai";
 import { IntentCategory, MessageRecord } from "../types";
 import { FILM_CHATBOT_SYSTEM_PROMPT } from "../config/systemPrompt";
@@ -186,8 +186,12 @@ export const classifyIntentWithGemini = async (
 
 // ─── Chat Response Generation ────────────────────────────────────────
 
-const GEMINI_CHAT_MODELS = ["gemini-2.5-flash", "gemini-2.0-flash"] as const;
-const MAX_RETRIES = 2;
+const GEMINI_CHAT_MODELS = [
+  "gemini-2.5-flash",
+  "gemini-2.0-flash",
+  "gemini-1.5-flash",
+] as const;
+const MAX_RETRIES = 3;
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -207,6 +211,12 @@ const generateWithGemini = async (
             temperature: 0.6,
             topP: 0.9,
             maxOutputTokens: 1024,
+            safetySettings: [
+              { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH },
+              { category: HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH },
+              { category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT, threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH },
+              { category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH },
+            ],
           },
           contents: historyContents,
         });
@@ -216,6 +226,16 @@ const generateWithGemini = async (
           console.log(`✅ Chat response: Gemini (${model})`);
           return text;
         }
+
+        const candidate = response.candidates?.[0];
+        const finishReason = candidate?.finishReason;
+        const safetyRatings = candidate?.safetyRatings;
+        const promptFeedback = (response as any)?.promptFeedback;
+        console.warn(
+          `⚠️ Gemini [${model}] returned empty text (finishReason: ${finishReason || "unknown"}). Falling through.`,
+          { safetyRatings, promptFeedback }
+        );
+        break;
       } catch (error: any) {
         const status = error?.status || error?.code;
         const is503 = status === 503 || error?.message?.includes("503");
@@ -241,7 +261,10 @@ const generateWithOpenAI = async (
   messages: { role: "system" | "user" | "assistant"; content: string }[]
 ): Promise<string | null> => {
   const oClient = getOpenAIClient();
-  if (!oClient) return null;
+  if (!oClient) {
+    console.warn("⚠️ OpenAI fallback unavailable: OPENAI_API_KEY is not set.");
+    return null;
+  }
 
   try {
     const response = await oClient.chat.completions.create({
