@@ -19,6 +19,8 @@ import {
   sendInstagramTypingIndicator,
 } from "./instagramApi";
 import metaSettingsService from "./metaSettings";
+import ProcessedMessage from "../models/processedMessage";
+import ConversationLock from "../models/conversationLock";
 
 
 const log = (stage: string, data?: Record<string, unknown>) => {
@@ -32,6 +34,63 @@ const log = (stage: string, data?: Record<string, unknown>) => {
 const logErr = (stage: string, err: unknown, data?: Record<string, unknown>) => {
   const info = err instanceof Error ? { message: err.message, stack: err.stack } : { err };
   console.error(`[IG] ${stage}`, JSON.stringify({ ...info, ...(data ?? {}) }));
+};
+
+// ─── Per-user serialization (Mongo-backed) ───────────────────────────
+// Meta can deliver webhooks faster than we can process them, and parallel
+// processing for the SAME user causes races on conversation.save() —
+// resulting in lost messages or replies that answer the wrong question.
+// We serialize per (senderId+pageId) using a Mongo lock so it works
+// across Vercel serverless instances.
+const LOCK_POLL_MS = 200;
+const LOCK_MAX_WAIT_MS = 25_000;
+
+const acquireLock = async (key: string): Promise<boolean> => {
+  try {
+    await ConversationLock.create({ key });
+    return true;
+  } catch (err: any) {
+    if (err?.code === 11000) return false;
+    throw err;
+  }
+};
+
+const releaseLock = async (key: string): Promise<void> => {
+  await ConversationLock.deleteOne({ key }).catch(() => {});
+};
+
+const runSerializedPerUser = async (
+  key: string,
+  task: () => Promise<void>
+): Promise<void> => {
+  const startedAt = Date.now();
+  while (!(await acquireLock(key))) {
+    if (Date.now() - startedAt > LOCK_MAX_WAIT_MS) {
+      log("lock.timeout", { key, waitedMs: Date.now() - startedAt });
+      throw new Error(`Timed out waiting for lock: ${key}`);
+    }
+    await new Promise((r) => setTimeout(r, LOCK_POLL_MS));
+  }
+  try {
+    await task();
+  } finally {
+    await releaseLock(key);
+  }
+};
+
+// ─── Webhook deduplication (Mongo-backed) ────────────────────────────
+// Meta occasionally redelivers the same webhook. ProcessedMessage has a
+// unique index + 10-min TTL on `mid`, so a duplicate insert throws and
+// we treat it as a duplicate. Works across Vercel instances.
+const isDuplicateMessage = async (mid: string | undefined): Promise<boolean> => {
+  if (!mid) return false;
+  try {
+    await ProcessedMessage.create({ mid });
+    return false;
+  } catch (err: any) {
+    if (err?.code === 11000) return true;
+    throw err;
+  }
 };
 
 // ─── Types ──────────────────────────────────────────────────────────
@@ -145,6 +204,7 @@ const processMessagingEvent = async (event: MessagingEvent) => {
   const senderId = event.sender?.id;
   const recipientId = event.recipient?.id;
   const isEcho = event.message?.is_echo === true;
+  const mid = event.message?.mid;
 
   // Handle postback (button tap) as text
   const messageText = event.message?.text ?? event.postback?.payload;
@@ -156,7 +216,7 @@ const processMessagingEvent = async (event: MessagingEvent) => {
     hasPostback: Boolean(event.postback),
     isEcho,
     isRead: Boolean(event.read),
-    mid: event.message?.mid,
+    mid,
   });
 
   if (event.read || isEcho || !senderId || !recipientId || !messageText) {
@@ -174,6 +234,11 @@ const processMessagingEvent = async (event: MessagingEvent) => {
     return;
   }
 
+  if (await isDuplicateMessage(mid)) {
+    log("event.skipped", { reason: "duplicate-mid", mid, senderId });
+    return;
+  }
+
   const accessToken = await metaSettingsService.getAccessToken();
   if (!accessToken) {
     logErr("event.no-access-token", new Error("Instagram access token is not configured"));
@@ -181,11 +246,13 @@ const processMessagingEvent = async (event: MessagingEvent) => {
   }
   log("event.access-token-resolved", { tokenLen: accessToken.length });
 
-  try {
-    await processIncomingMessage(senderId, recipientId, messageText, accessToken);
-  } catch (error) {
-    logErr("event.process-failed", error, { senderId, recipientId });
-  }
+  await runSerializedPerUser(`${senderId}:${recipientId}`, async () => {
+    try {
+      await processIncomingMessage(senderId, recipientId, messageText, accessToken);
+    } catch (error) {
+      logErr("event.process-failed", error, { senderId, recipientId });
+    }
+  });
 };
 
 // ─── Gate checks + AI response ──────────────────────────────────────
@@ -420,7 +487,7 @@ const processAIResponse = async (
       log("ai.reply.general-ok", { senderId, replyLen: replyText.length });
     } else {
       replyText =
-        "Sorry, I'm having a bit of trouble right now. Could you try asking that again?";
+        "Hmm, give me a sec on that one — could you rephrase or ask again?";
       logErr("ai.reply.general-fallback", new Error("All AI providers returned null"), { senderId });
     }
   } else {
@@ -455,13 +522,29 @@ const processAIResponse = async (
   await conversation.save();
   log("ai.saved", { senderId, status: conversation.status, messageStep: conversation.messageStep });
 
-  // ── Send reply via Instagram Graph API ──
+  // ── Send reply via Instagram Graph API (with retry) ──
   log("ai.send.start", { senderId, replyLen: replyText.length });
-  try {
-    const res = await sendInstagramMessage(accessToken, senderId, replyText);
-    log("ai.send.done", { senderId, ok: res.ok, status: res.status });
-  } catch (err) {
-    logErr("ai.send.threw", err, { senderId });
+  const SEND_MAX_ATTEMPTS = 3;
+  for (let attempt = 1; attempt <= SEND_MAX_ATTEMPTS; attempt++) {
+    try {
+      const res = await sendInstagramMessage(accessToken, senderId, replyText);
+      log("ai.send.done", { senderId, ok: res.ok, status: res.status, attempt });
+      if (res.ok) break;
+      if (attempt < SEND_MAX_ATTEMPTS) {
+        await new Promise((r) => setTimeout(r, 500 * attempt));
+        continue;
+      }
+      logErr("ai.send.failed-final", new Error(`Send failed after ${SEND_MAX_ATTEMPTS} attempts`), {
+        senderId,
+        status: res.status,
+      });
+    } catch (err) {
+      logErr("ai.send.threw", err, { senderId, attempt });
+      if (attempt < SEND_MAX_ATTEMPTS) {
+        await new Promise((r) => setTimeout(r, 500 * attempt));
+        continue;
+      }
+    }
   }
 };
 
